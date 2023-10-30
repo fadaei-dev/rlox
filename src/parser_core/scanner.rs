@@ -109,6 +109,8 @@ impl<'a> Scanner<'a> {
                         self.add_token(TokenType::SLASH);
                     }
                 }
+                ' ' | '\r' | '\t' => (),
+                '\n' => self.line += 1,
                 _ => {
                     return Err(Report::new(
                         self.line,
@@ -119,7 +121,7 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        todo!()
+        Ok(())
     }
 
     fn peek(&self) -> char {
@@ -165,5 +167,19 @@ impl<'a> Scanner<'a> {
 
         self.current += 1;
         return true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn handle_one_char_tokens() {
+        let source = String::from("(( ))");
+        let mut scanner = Scanner::new(&source);
+
+        let _ = scanner.scan_tokens();
+        assert_eq!(scanner.tokens.len(), 4);
     }
 }
