@@ -52,8 +52,7 @@ pub enum TokenType {
 
 #[derive(Clone, Debug)]
 pub enum LiteralValue {
-    IntValue(i64),
-    FloatValue(f64),
+    NumberValue(f64),
     StringValue(String),
     IdentifierValue(String),
 }
@@ -61,9 +60,9 @@ pub enum LiteralValue {
 #[derive(Clone, Debug)]
 pub struct Token {
     pub token_type: TokenType,
-    lexeme: String,
-    literal: Option<LiteralValue>,
-    line: usize,
+    pub lexeme: String,
+    pub literal: Option<LiteralValue>,
+    pub line: usize,
 }
 
 impl Token {

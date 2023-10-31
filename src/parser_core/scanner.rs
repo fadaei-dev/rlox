@@ -1,9 +1,7 @@
 use crate::{
     error::Report,
-    parser_core::token::{Token, TokenType},
+    parser_core::token::{LiteralValue, Token, TokenType},
 };
-
-use super::token::LiteralValue;
 
 pub struct Scanner {
     source: String,
@@ -52,8 +50,8 @@ impl Scanner {
     fn scan_token(&mut self) -> Result<(), Report> {
         let c = self.advance();
 
-        if let Some(char) = c {
-            match char {
+        if let Some(_char) = c {
+            match _char {
                 '(' => self.add_token(TokenType::LEFT_PAREN),
                 ')' => self.add_token(TokenType::RIGHT_PAREN),
                 '{' => self.add_token(TokenType::LEFT_BRACE),
@@ -113,7 +111,7 @@ impl Scanner {
                 }
 
                 // string literal
-                '"' => self.string_literal(),
+                '"' => self.string_literal()?,
 
                 // special characters
                 ' ' | '\r' | '\t' => (),
@@ -121,11 +119,15 @@ impl Scanner {
 
                 // Report errors to scan_tokens
                 _ => {
-                    return Err(Report::new(
-                        self.line,
-                        String::new(),
-                        String::from("Unexpected character."),
-                    ))
+                    if _char.is_digit(10) {
+                        self.number_literal()?;
+                    } else {
+                        return Err(Report::new(
+                            self.line,
+                            String::new(),
+                            String::from("Unexpected character."),
+                        ));
+                    }
                 }
             }
         }
@@ -155,6 +157,14 @@ impl Scanner {
         }
 
         self.source.chars().nth(self.current).unwrap()
+    }
+
+    fn peek_next(&self) -> char {
+        if self.current + 1 >= self.source.len() {
+            return '\0';
+        }
+
+        self.source.chars().nth(self.current + 1).unwrap()
     }
 
     fn advance(&mut self) -> Option<char> {
@@ -203,10 +213,38 @@ impl Scanner {
             .source
             .chars()
             .skip(self.start + 1)
-            .take(self.current - 1)
+            .take(self.current - 2)
             .collect();
 
         self.add_token_literal(TokenType::STRING, Some(LiteralValue::StringValue(trimmed)));
+
+        Ok(())
+    }
+
+    fn number_literal(&mut self) -> Result<(), Report> {
+        while self.peek().is_digit(10) {
+            self.advance();
+        }
+
+        if self.peek() == '.' && self.peek_next().is_digit(10) {
+            self.advance();
+
+            while self.peek().is_digit(10) {
+                self.advance();
+            }
+        }
+
+        // TODO: match trimmed to return Report error on fail
+        let trimmed: f64 = self
+            .source
+            .chars()
+            .skip(self.start + 1)
+            .take(self.current - 1)
+            .collect::<String>()
+            .parse()
+            .unwrap();
+
+        self.add_token_literal(TokenType::NUMBER, Some(LiteralValue::NumberValue(trimmed)));
 
         Ok(())
     }
@@ -242,5 +280,35 @@ mod tests {
         assert_eq!(scanner.tokens[2].token_type, TokenType::EQUAL_EQUAL);
         assert_eq!(scanner.tokens[3].token_type, TokenType::GREATER_EQUAL);
         assert_eq!(scanner.tokens[4].token_type, TokenType::EOF);
+    }
+
+    #[test]
+    fn handle_comment_line() {
+        let source = "// this is a comment\n";
+
+        let mut scanner = Scanner::new(source.into());
+
+        let _ = scanner.scan_tokens();
+    }
+
+    #[test]
+    fn handle_string_token() {
+        let source = "\"this is a string\"";
+        let mut scanner = Scanner::new(source.into());
+
+        let _ = scanner.scan_tokens();
+        assert_eq!(scanner.tokens.len(), 2);
+        assert_eq!(scanner.tokens[0].token_type, TokenType::STRING);
+        assert_eq!(scanner.tokens[0].literal.is_some(), true);
+        assert_eq!(
+            scanner.tokens[0].literal.clone().is_some_and(|lit| {
+                if let LiteralValue::StringValue(s) = lit {
+                    return "this is a string" == s;
+                } else {
+                    return false;
+                }
+            }),
+            true
+        );
     }
 }
