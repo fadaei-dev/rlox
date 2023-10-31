@@ -5,16 +5,16 @@ use crate::{
 
 use super::token::LiteralValue;
 
-pub struct Scanner<'a> {
-    source: &'a String,
+pub struct Scanner {
+    source: String,
     tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
 }
 
-impl<'a> Scanner<'a> {
-    pub fn new(source: &'a String) -> Self {
+impl Scanner {
+    pub fn new(source: String) -> Self {
         Self {
             source,
             start: 0,
@@ -54,6 +54,8 @@ impl<'a> Scanner<'a> {
 
         if let Some(char) = c {
             match char {
+                '(' => self.add_token(TokenType::LEFT_PAREN),
+                ')' => self.add_token(TokenType::RIGHT_PAREN),
                 '{' => self.add_token(TokenType::LEFT_BRACE),
                 '}' => self.add_token(TokenType::RIGHT_BRACE),
                 ',' => self.add_token(TokenType::COMMA),
@@ -109,8 +111,15 @@ impl<'a> Scanner<'a> {
                         self.add_token(TokenType::SLASH);
                     }
                 }
+
+                // string literal
+                '"' => self.string_literal(),
+
+                // special characters
                 ' ' | '\r' | '\t' => (),
                 '\n' => self.line += 1,
+
+                // Report errors to scan_tokens
                 _ => {
                     return Err(Report::new(
                         self.line,
@@ -122,14 +131,6 @@ impl<'a> Scanner<'a> {
         }
 
         Ok(())
-    }
-
-    fn peek(&self) -> char {
-        if self.is_at_end() {
-            return '\0';
-        }
-
-        self.source.chars().nth(self.current).unwrap()
     }
 
     fn add_token(&mut self, token_type: TokenType) {
@@ -146,6 +147,14 @@ impl<'a> Scanner<'a> {
 
         self.tokens
             .push(Token::new(token_type, text, literal, self.line));
+    }
+
+    fn peek(&self) -> char {
+        if self.is_at_end() {
+            return '\0';
+        }
+
+        self.source.chars().nth(self.current).unwrap()
     }
 
     fn advance(&mut self) -> Option<char> {
@@ -170,16 +179,68 @@ impl<'a> Scanner<'a> {
     }
 }
 
+// literals impl
+impl Scanner {
+    fn string_literal(&mut self) -> Result<(), Report> {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return Err(Report::new(
+                self.line,
+                String::new(),
+                "Unterminated string.".into(),
+            ));
+        }
+
+        self.advance();
+
+        let trimmed: String = self
+            .source
+            .chars()
+            .skip(self.start + 1)
+            .take(self.current - 1)
+            .collect();
+
+        self.add_token_literal(TokenType::STRING, Some(LiteralValue::StringValue(trimmed)));
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn handle_one_char_tokens() {
-        let source = String::from("(( ))");
-        let mut scanner = Scanner::new(&source);
+        let source = "(( ))";
+        let mut scanner = Scanner::new(source.into());
 
         let _ = scanner.scan_tokens();
-        assert_eq!(scanner.tokens.len(), 4);
+        assert_eq!(scanner.tokens.len(), 5);
+        assert_eq!(scanner.tokens[0].token_type, TokenType::LEFT_PAREN);
+        assert_eq!(scanner.tokens[1].token_type, TokenType::LEFT_PAREN);
+        assert_eq!(scanner.tokens[2].token_type, TokenType::RIGHT_PAREN);
+        assert_eq!(scanner.tokens[3].token_type, TokenType::RIGHT_PAREN);
+        assert_eq!(scanner.tokens[4].token_type, TokenType::EOF);
+    }
+
+    #[test]
+    fn handle_two_char_tokens() {
+        let source = "! != == >=";
+        let mut scanner = Scanner::new(source.into());
+
+        let _ = scanner.scan_tokens();
+        assert_eq!(scanner.tokens.len(), 5);
+        assert_eq!(scanner.tokens[0].token_type, TokenType::BANG);
+        assert_eq!(scanner.tokens[1].token_type, TokenType::BANG_EQUAL);
+        assert_eq!(scanner.tokens[2].token_type, TokenType::EQUAL_EQUAL);
+        assert_eq!(scanner.tokens[3].token_type, TokenType::GREATER_EQUAL);
+        assert_eq!(scanner.tokens[4].token_type, TokenType::EOF);
     }
 }

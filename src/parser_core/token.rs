@@ -1,5 +1,5 @@
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LEFT_PAREN,
@@ -50,7 +50,7 @@ pub enum TokenType {
     EOF,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum LiteralValue {
     IntValue(i64),
     FloatValue(f64),
@@ -58,9 +58,9 @@ pub enum LiteralValue {
     IdentifierValue(String),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Token {
-    token_type: TokenType,
+    pub token_type: TokenType,
     lexeme: String,
     literal: Option<LiteralValue>,
     line: usize,
