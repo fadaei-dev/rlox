@@ -24,7 +24,7 @@ fn main() -> Result<(), ()> {
 
 fn run_file(path: &String) {
     match fs::read_to_string(path) {
-        Ok(source) => run(source),
+        Ok(source) => run(&source),
         _ => println!("Error opening file"),
     };
 }
@@ -41,12 +41,12 @@ fn run_prompt() {
             if line.trim() == "exit" {
                 break;
             }
-            run(line.trim().to_string());
+            run(line.trim());
         }
     }
 }
 
-fn run(s: String) {
+fn run(s: &str) {
     let mut scanner = Scanner::new(s);
     if let Ok(tokens) = scanner.scan_tokens() {
         for token in tokens {

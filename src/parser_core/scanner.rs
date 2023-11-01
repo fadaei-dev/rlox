@@ -3,16 +3,18 @@ use crate::{
     parser_core::token::{LiteralValue, Token, TokenType},
 };
 
-pub struct Scanner {
-    source: String,
+use substring::Substring;
+
+pub struct Scanner<'a> {
+    source: &'a str,
     tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
 }
 
-impl Scanner {
-    pub fn new(source: String) -> Self {
+impl<'a> Scanner<'a> {
+    pub fn new(source: &'a str) -> Self {
         Self {
             source,
             start: 0,
@@ -113,21 +115,22 @@ impl Scanner {
                 // string literal
                 '"' => self.string_literal()?,
 
+                // number literal
+                _ if _char.is_ascii_digit() => self.number_literal()?,
+
+                _ if _char.is_ascii_alphabetic() => self.reserved_literal()?,
+
                 // special characters
                 ' ' | '\r' | '\t' => (),
                 '\n' => self.line += 1,
 
                 // Report errors to scan_tokens
                 _ => {
-                    if _char.is_digit(10) {
-                        self.number_literal()?;
-                    } else {
-                        return Err(Report::new(
-                            self.line,
-                            String::new(),
-                            String::from("Unexpected character."),
-                        ));
-                    }
+                    return Err(Report::new(
+                        self.line,
+                        String::new(),
+                        String::from("Unexpected character."),
+                    ));
                 }
             }
         }
@@ -140,12 +143,7 @@ impl Scanner {
     }
 
     fn add_token_literal(&mut self, token_type: TokenType, literal: Option<LiteralValue>) {
-        let text: String = self
-            .source
-            .chars()
-            .skip(self.start)
-            .take(self.current)
-            .collect();
+        let text: String = self.source.substring(self.start, self.current).into();
 
         self.tokens
             .push(Token::new(token_type, text, literal, self.line));
@@ -190,7 +188,7 @@ impl Scanner {
 }
 
 // literals impl
-impl Scanner {
+impl<'a> Scanner<'a> {
     fn string_literal(&mut self) -> Result<(), Report> {
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
@@ -211,10 +209,8 @@ impl Scanner {
 
         let trimmed: String = self
             .source
-            .chars()
-            .skip(self.start + 1)
-            .take(self.current - 2)
-            .collect();
+            .substring(self.start + 1, self.current - 1)
+            .into();
 
         self.add_token_literal(TokenType::STRING, Some(LiteralValue::StringValue(trimmed)));
 
@@ -222,34 +218,35 @@ impl Scanner {
     }
 
     fn number_literal(&mut self) -> Result<(), Report> {
-        while self.peek().is_digit(10) {
+        while self.peek().is_ascii_digit() {
             self.advance();
         }
 
-        if self.peek() == '.' && self.peek_next().is_digit(10) {
+        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
             self.advance();
 
-            while self.peek().is_digit(10) {
+            while self.peek().is_ascii_digit() {
                 self.advance();
             }
         }
 
         // TODO: match trimmed to return Report error on fail
-        let trimmed: f64 = self
-            .source
-            .chars()
-            .skip(self.start + 1)
-            .take(self.current - 1)
-            .collect::<String>()
-            .parse()
-            .unwrap();
+        let trimmed: String = self.source.substring(self.start, self.current).into();
 
-        self.add_token_literal(TokenType::NUMBER, Some(LiteralValue::NumberValue(trimmed)));
+        if let Ok(parsed_float) = trimmed.parse::<f64>() {
+            let number = LiteralValue::NumberValue(parsed_float);
+            self.add_token_literal(TokenType::NUMBER, Some(number));
+        }
 
         Ok(())
     }
+
+    fn reserved_literal(&mut self) -> Result<(), Report> {
+        todo!()
+    }
 }
 
+// tests clone literals multiple times, literals are low cost structs
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,16 +280,17 @@ mod tests {
     }
 
     #[test]
-    fn handle_comment_line() {
-        let source = "// this is a comment\n";
+    fn handle_comment_tokens() {
+        let source = "// this (/<-ignore) is a comment\n";
 
         let mut scanner = Scanner::new(source.into());
 
         let _ = scanner.scan_tokens();
+        assert_eq!(scanner.tokens.len(), 1);
     }
 
     #[test]
-    fn handle_string_token() {
+    fn handle_string_tokens() {
         let source = "\"this is a string\"";
         let mut scanner = Scanner::new(source.into());
 
@@ -306,6 +304,39 @@ mod tests {
                     return "this is a string" == s;
                 } else {
                     return false;
+                }
+            }),
+            true
+        );
+    }
+
+    #[test]
+    fn handle_number_tokens() {
+        let source = "7 5.43 52 1.9";
+        let mut scanner = Scanner::new(source.into());
+
+        let _ = scanner.scan_tokens();
+        assert_eq!(scanner.tokens.len(), 5);
+        assert_eq!(scanner.tokens[0].token_type, TokenType::NUMBER);
+        assert_eq!(scanner.tokens[0].literal.is_some(), true);
+
+        assert_eq!(
+            scanner.tokens[0].literal.clone().is_some_and(|lit| {
+                if let LiteralValue::NumberValue(n) = lit {
+                    return 7.0 == n;
+                } else {
+                    false
+                }
+            }),
+            true
+        );
+
+        assert_eq!(
+            scanner.tokens[1].literal.clone().is_some_and(|lit| {
+                if let LiteralValue::NumberValue(n) = lit {
+                    return 5.43 == n;
+                } else {
+                    false
                 }
             }),
             true
