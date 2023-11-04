@@ -48,9 +48,19 @@ fn run_prompt() {
 
 fn run(s: &str) {
     let mut scanner = Scanner::new(s);
-    if let Ok(tokens) = scanner.scan_tokens() {
-        for token in tokens {
-            println!("{token}");
+    match scanner.scan_tokens() {
+        Ok(tokens) => {
+            for token in tokens {
+                println!("{token}");
+            }
+
+            print!("\n-- meta --\n");
+            println!("Lines -- {}", scanner.line);
+        }
+        Err(errors) => {
+            for err in errors {
+                err.report();
+            }
         }
     }
 }

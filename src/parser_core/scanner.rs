@@ -10,7 +10,7 @@ pub struct Scanner<'a> {
     tokens: Vec<Token>,
     start: usize,
     current: usize,
-    line: usize,
+    pub line: usize,
 }
 
 impl<'a> Scanner<'a> {
@@ -137,114 +137,12 @@ impl<'a> Scanner<'a> {
 
         Ok(())
     }
-
-    fn add_token(&mut self, token_type: TokenType) {
-        self.add_token_literal(token_type, None);
-    }
-
-    fn add_token_literal(&mut self, token_type: TokenType, literal: Option<LiteralValue>) {
-        let text: String = self.source.substring(self.start, self.current).into();
-
-        self.tokens
-            .push(Token::new(token_type, text, literal, self.line));
-    }
-
-    fn peek(&self) -> char {
-        if self.is_at_end() {
-            return '\0';
-        }
-
-        self.source.chars().nth(self.current).unwrap()
-    }
-
-    fn peek_next(&self) -> char {
-        if self.current + 1 >= self.source.len() {
-            return '\0';
-        }
-
-        self.source.chars().nth(self.current + 1).unwrap()
-    }
-
-    fn advance(&mut self) -> Option<char> {
-        let r = self.source.chars().nth(self.current);
-
-        self.current += 1;
-        r
-    }
-
-    fn _match(&mut self, c: char) -> bool {
-        if self.is_at_end() {
-            return false;
-        }
-        if let Some(m) = self.source.chars().nth(self.current) {
-            if m != c {
-                return false;
-            }
-        }
-
-        self.current += 1;
-        return true;
-    }
 }
 
+// helpers impl
+mod scanner_helpers;
 // literals impl
-impl<'a> Scanner<'a> {
-    fn string_literal(&mut self) -> Result<(), Report> {
-        while self.peek() != '"' && !self.is_at_end() {
-            if self.peek() == '\n' {
-                self.line += 1
-            }
-            self.advance();
-        }
-
-        if self.is_at_end() {
-            return Err(Report::new(
-                self.line,
-                String::new(),
-                "Unterminated string.".into(),
-            ));
-        }
-
-        self.advance();
-
-        let trimmed: String = self
-            .source
-            .substring(self.start + 1, self.current - 1)
-            .into();
-
-        self.add_token_literal(TokenType::STRING, Some(LiteralValue::StringValue(trimmed)));
-
-        Ok(())
-    }
-
-    fn number_literal(&mut self) -> Result<(), Report> {
-        while self.peek().is_ascii_digit() {
-            self.advance();
-        }
-
-        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
-            self.advance();
-
-            while self.peek().is_ascii_digit() {
-                self.advance();
-            }
-        }
-
-        // TODO: match trimmed to return Report error on fail
-        let trimmed: String = self.source.substring(self.start, self.current).into();
-
-        if let Ok(parsed_float) = trimmed.parse::<f64>() {
-            let number = LiteralValue::NumberValue(parsed_float);
-            self.add_token_literal(TokenType::NUMBER, Some(number));
-        }
-
-        Ok(())
-    }
-
-    fn reserved_literal(&mut self) -> Result<(), Report> {
-        todo!()
-    }
-}
+mod scanner_literals;
 
 // tests clone literals multiple times, literals are low cost structs
 #[cfg(test)]
@@ -318,7 +216,6 @@ mod tests {
         let _ = scanner.scan_tokens();
         assert_eq!(scanner.tokens.len(), 5);
         assert_eq!(scanner.tokens[0].token_type, TokenType::NUMBER);
-        assert_eq!(scanner.tokens[0].literal.is_some(), true);
 
         assert_eq!(
             scanner.tokens[0].literal.clone().is_some_and(|lit| {
@@ -334,6 +231,7 @@ mod tests {
         assert_eq!(
             scanner.tokens[1].literal.clone().is_some_and(|lit| {
                 if let LiteralValue::NumberValue(n) = lit {
+                    dbg!(n);
                     return 5.43 == n;
                 } else {
                     false
